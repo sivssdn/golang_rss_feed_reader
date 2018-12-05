@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"io/ioutil"
 	"net/http"
+	"sync"
 	"fmt"
 )
 
@@ -29,30 +30,41 @@ type Item struct {
 
 
 func main() {
-	crawlMediumFeeds()	
+
+	/*list the links of all feed urls in the rss_feed_urls array */
+	xml_2_url_sources := []string{ "https://towardsdatascience.com/feed", 
+										    "https://www.sciencedaily.com/rss/computers_math/computer_modeling.xml"}
+	
+	crawlMediumFeeds(xml_2_url_sources)	
 	
 }
 
-func crawlMediumFeeds(){
-	/*list the links of all feed urls in the rss_feed_urls array */
-	var rss_feed_urls = []string{""}
+func crawlMediumFeeds(rss_feed_urls []string){
+
+	var wg sync.WaitGroup
+	wg.Add(len(rss_feed_urls)) //wait for these many go routines to be completed 
 
 	for _, rss_feed_url := range rss_feed_urls{
 		
-		client := &http.Client{}
-		request,_ := http.NewRequest("GET", rss_feed_url, nil)
-		request.Header.Set("user-agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.92 Safari/537.36")
-		response, _ := client.Do(request)
-		defer response.Body.Close()
-		response_body, _ := ioutil.ReadAll(response.Body)
+		go func(rss_feed_url string){
+			defer wg.Done()
 
-		var mediumRss MediumRoot
-		xml.Unmarshal(response_body, &mediumRss)
+			client := &http.Client{}
+			request,_ := http.NewRequest("GET", rss_feed_url, nil)
+			request.Header.Set("user-agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.92 Safari/537.36")
+			response, _ := client.Do(request)
+			defer response.Body.Close()
+			response_body, _ := ioutil.ReadAll(response.Body)
 
-		for i := 0; i < len(mediumRss.Channel.Item); i++ {
-			fmt.Println("" + mediumRss.Channel.Item[i].Link)
-		}
+			var mediumRss MediumRoot
+			xml.Unmarshal(response_body, &mediumRss)
+
+			for i := 0; i < len(mediumRss.Channel.Item); i++ {
+				fmt.Println("" + mediumRss.Channel.Item[i].Link)
+			}
+
+		}(rss_feed_url)
 	}
 
-
+	wg.Wait()
 }
